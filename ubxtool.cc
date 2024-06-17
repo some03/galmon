@@ -588,6 +588,15 @@ namespace
     uint32_t tAcc;
   } __attribute__((packed));
 
+  struct TIMEQZSS
+  {
+    uint32_t itow;
+    int32_t ftow;
+    int16_t week;
+    int8_t leapS;
+    uint8_t valid;
+    uint32_t tAcc;
+  } __attribute__((packed));
 }
 
 // ubxtool device srcid
@@ -602,6 +611,7 @@ int main(int argc, char **argv)
   bool doFakeFix{false};
   bool doKeepNMEA{false};
   bool doSTDOUT = false;
+  bool doQZSS{false};
 #ifdef OpenBSD
   doRTSCTS = false;
 #endif
@@ -621,6 +631,7 @@ int main(int argc, char **argv)
   app.add_flag("--reset", doReset, "Reset UBX device");
   app.add_flag("--beidou,-c", doBeidou, "Enable BeiDou reception");
   app.add_flag("--gps,-g", doGPS, "Enable GPS reception");
+  app.add_flag("--qzss,-q", doQZSS, "Enable QZSS reception");
   app.add_flag("--glonass,-r", doGlonass, "Enable Glonass reception");
   app.add_flag("--galileo,-e", doGalileo, "Enable Galileo reception");
   app.add_flag("--sbas,-s", doSBAS, "Enable SBAS (EGNOS/WAAS/etc) reception");
@@ -831,28 +842,27 @@ int main(int argc, char **argv)
       }
       if (!version9)
       {
+        //add QZSS
         //                                  ver   RO   maxch cfgs
         msg = buildUbxMessage(0x06, 0x3e, {0x00, 0x00, 0xff, 0x06,
-                                           //                            GPS   min  max   res   x1         x2    x3,   x4
-                                           0x00, 0x04, 0x08, 0, doGPS, 0x00, 0x01, 0x00,
-                                           //                            SBAS  min  max   rex   x1       x2    x3    x4
-                                           0x01, 0x03, 0x04, 0, doSBAS, 0x00, 0x01, 0x00,
-                                           //                            BEI   min  max   res   x1       x2    x3,   x4
-                                           0x03, 0x04, 0x08, 0, doBeidou, 0x00, 0x01, 0x00,
-                                           //                            ???   min  max   res   x1   x2    x3,   x4
-                                           0x05, 0x04, 0x08, 0, 0, 0x00, 0x01, 0x00,
-
-                                           //                            GAL   min  max   res   x1   x2    x3,   x4
-                                           0x02, 0x08, 0x0A, 0, doGalileo, 0x00, 0x01, 0x00,
-                                           //                            GLO   min  max   res   x1   x2    x3,   x4
-                                           0x06, 0x06, 0x08, 0, doGlonass, 0x00, 0x01, 0x00
-
-                                          });
+                   //                            GPS   min  max   res   x1         x2    x3,   x4
+                   0x00, 0x04, 0x08, 0, doGPS, 0x00, 0x01, 0x00,
+                   //                            SBAS  min  max   rex   x1       x2    x3    x4
+                   0x01, 0x03, 0x04, 0, doSBAS, 0x00, 0x01, 0x00,
+                   //                            BEI   min  max   res   x1       x2    x3,   x4
+                   0x03, 0x04, 0x08, 0, doBeidou, 0x00, 0x01, 0x00,
+                   //                            QZSS  min  max   res   x1       x2    x3,   x4
+                   0x04, 0x04, 0x08, 0, doQZSS, 0x00, 0x01, 0x00,
+                   //                            GAL   min  max   res   x1   x2    x3,   x4
+                   0x02, 0x08, 0x0A, 0, doGalileo, 0x00, 0x01, 0x00,
+                   //                            GLO   min  max   res   x1   x2    x3,   x4
+                   0x06, 0x06, 0x08, 0, doGlonass, 0x00, 0x01, 0x00
+                  });
 
         if (doDEBUG)
         {
-          cerr << humanTimeNow() << " Sending GNSS setting, GPS: " << doGPS << ", Galileo: " << doGalileo << ", BeiDou: " << doBeidou << ", GLONASS: " << doGlonass << ", SBAS: " << doSBAS << endl;
-        }
+          cerr << humanTimeNow() << " Sending GNSS setting, GPS: " << doGPS << ", Galileo: " << doGalileo << ", BeiDou: " << doBeidou << ", GLONASS: " << doGlonass << ", SBAS: " << doSBAS << ", QZSS: " << doQZSS << endl;
+        } 
 
         if (sendAndWaitForUBXAckNack(fd, 2, msg, 0x06, 0x3e))
         { // GNSS setting
@@ -1275,7 +1285,8 @@ int main(int argc, char **argv)
     TIMEGPS gps;
     TIMEGLO glo;
     TIMEBDS bds;
-    bool doGlonass, doGalileo, doBeidou, doGPS;
+    TIMEQZSS qzss;
+    bool doGlonass, doGalileo, doBeidou, doGPS,doQZSS;
     void transmitIfComplete(NMMSender &ns)
     {
       vector<int> itows;
@@ -1287,6 +1298,8 @@ int main(int argc, char **argv)
         itows.push_back(bds.itow);
       if (doGPS)
         itows.push_back(gps.itow);
+      if (doQZSS)
+        itows.push_back(qzss.itow);
 
       if (itows.empty())
         return;
