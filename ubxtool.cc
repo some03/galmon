@@ -49,6 +49,7 @@
 #include <cerrno>
 #include <sys/time.h>
 
+//test comment
 static char program[] = "ubxtool";
 
 bool doDEBUG{false};
